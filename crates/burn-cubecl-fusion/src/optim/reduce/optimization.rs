@@ -395,8 +395,18 @@ impl<R: Runtime> TraceRunner<R> for FusedReduceLaunch<'_> {
             }
         };
 
+        // Fix for tracel-ai/burn#5292: when the reduce's reference layout is a Concrete
+        // Output, strides must be resolved against the outputs launch args, mirroring the
+        // `shape` dispatch above -- not unconditionally against `inputs`, which can be a
+        // shorter/mismatched arg list and trips an index-out-of-bounds in resolve_arg.
+        let ref_strides = match &config_read.ref_layout {
+            RefLayout::Concrete(FuseArg::Output(..)) => {
+                outputs.strides_ref(&config_read.ref_layout, config_read.rank)
+            }
+            _ => inputs.strides_ref(&config_read.ref_layout, config_read.rank),
+        };
         let out_vec_axis = output_vectorization_axis(
-            &inputs.strides_ref(&config_read.ref_layout, config_read.rank),
+            &ref_strides,
             self.reduce.axis,
             vectorization_mode,
         );
